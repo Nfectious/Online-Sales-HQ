@@ -1,0 +1,17 @@
+            `);
+            printWindow.document.close();
+        }
+
+        // Clear editor function
+        function clearEditor() {
+            if (confirm('⚠️ This will delete all current content. Are you sure?')) {
+                editor.value = '';
+                updatePreview();
+                localStorage.removeItem('valkyrie_markdown');
+                editor.focus();
+                alert('✅ Editor cleared!');
+            }
+        }
+    </script>
+</body>
+</html>

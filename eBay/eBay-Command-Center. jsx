@@ -1,0 +1,615 @@
+import { useState, useEffect, useRef } from "react";
+
+const API_URL = "https://api.anthropic.com/v1/messages";
+
+// ── Storage ──────────────────────────────────────────────────────────────────
+async function load(key) {
+  try { const r = await window.storage.get(key); return r ? JSON.parse(r.value) : null; } catch { return null; }
+}
+async function save(key, val) {
+  try { await window.storage.set(key, JSON.stringify(val)); } catch {}
+}
+
+// ── Seed inventory ───────────────────────────────────────────────────────────
+const SEED_INV = [
+  { sku:"OWN-00001", title:"Craftsman 3/8 Ratchet Set", type:"own", qty:3, price:24.99, status:"active", sold:2, category:"Tools", photos:[] },
+  { sku:"OWN-00002", title:"Vintage Zippo Lighter 1978", type:"own", qty:1, price:45.00, status:"active", sold:5, category:"Collectibles", photos:[] },
+  { sku:"OWN-00003", title:"DeWalt 20V Battery Pack", type:"own", qty:0, price:59.99, status:"out", sold:1, category:"Electronics", photos:[] },
+  { sku:"DS-00001", title:"Phone Case iPhone 15 Pro", type:"dropship", qty:99, price:12.99, status:"active", sold:18, category:"Electronics", photos:[] },
+  { sku:"DS-00002", title:"LED Strip Lights 32ft", type:"dropship", qty:99, price:19.99, status:"active", sold:7, category:"Home", photos:[] },
+];
+
+// ── Claude ───────────────────────────────────────────────────────────────────
+async function callClaude(prompt, sys="You are an expert eBay seller assistant.") {
+  const res = await fetch(API_URL, {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:1000, system:sys, messages:[{role:"user",content:prompt}] })
+  });
+  const d = await res.json();
+  return d.content?.[0]?.text || "";
+}
+
+// ── R2 Upload ────────────────────────────────────────────────────────────────
+async function uploadToR2(file, cfg) {
+  // Uses R2's S3-compatible presigned URL approach via fetch
+  // cfg: { accountId, accessKey, secretKey, bucket, publicUrl }
+  const key = `ebay/${Date.now()}-${file.name.replace(/\s/g,"_")}`;
+  const endpoint = `https://${cfg.accountId}.r2.cloudflarestorage.com/${cfg.bucket}/${key}`;
+  // Sign with AWS Signature V4 (simplified for R2)
+  const date = new Date();
+  const dateStr = date.toISOString().replace(/[:\-]|\.\d{3}/g,"").slice(0,15)+"Z";
+  const dateShort = dateStr.slice(0,8);
+  const region = "auto";
+  const service = "s3";
+  const credScope = `${dateShort}/${region}/${service}/aws4_request`;
+  const signedHeaders = "content-type;host;x-amz-date";
+  const host = `${cfg.accountId}.r2.cloudflarestorage.com`;
+  const canonicalUri = `/${cfg.bucket}/${key}`;
+  const contentType = file.type || "application/octet-stream";
+
+  // Build canonical request
+  const canonicalHeaders = `content-type:${contentType}\nhost:${host}\nx-amz-date:${dateStr}\n`;
+  const buf = await file.arrayBuffer();
+  const hashBuf = await crypto.subtle.digest("SHA-256", buf);
+  const payloadHash = Array.from(new Uint8Array(hashBuf)).map(b=>b.toString(16).padStart(2,"0")).join("");
+  const canonicalRequest = `PUT\n${canonicalUri}\n\n${canonicalHeaders}\n${signedHeaders}\n${payloadHash}`;
+
+  // String to sign
+  const crHash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonicalRequest));
+  const crHex = Array.from(new Uint8Array(crHash)).map(b=>b.toString(16).padStart(2,"0")).join("");
+  const strToSign = `AWS4-HMAC-SHA256\n${dateStr}\n${credScope}\n${crHex}`;
+
+  // Signing key
+  const hmac = async (k, d) => {
+    const key = typeof k === "string" ? new TextEncoder().encode(k) : k;
+    const ck = await crypto.subtle.importKey("raw", key, {name:"HMAC",hash:"SHA-256"}, false, ["sign"]);
+    return new Uint8Array(await crypto.subtle.sign("HMAC", ck, new TextEncoder().encode(d)));
+  };
+  const kDate = await hmac(`AWS4${cfg.secretKey}`, dateShort);
+  const kRegion = await hmac(kDate, region);
+  const kService = await hmac(kRegion, service);
+  const kSigning = await hmac(kService, "aws4_request");
+  const sigBuf = await hmac(kSigning, strToSign);
+  const signature = Array.from(sigBuf).map(b=>b.toString(16).padStart(2,"0")).join("");
+
+  const authHeader = `AWS4-HMAC-SHA256 Credential=${cfg.accessKey}/${credScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+
+  const resp = await fetch(endpoint, {
+    method:"PUT",
+    headers: { "Content-Type":contentType, "x-amz-date":dateStr, "Authorization":authHeader },
+    body: buf
+  });
+  if (!resp.ok) throw new Error(`R2 upload failed: ${resp.status}`);
+  return `${cfg.publicUrl}/${key}`;
+}
+
+// ── CSV ───────────────────────────────────────────────────────────────────────
+const CSV_HEADERS = ["Action","CustomLabel","Title","Description","PicURL","Category","StartPrice","Quantity","ConditionID","ShippingService","ShippingServiceCost","ShipToLocations","SiteID","Currency","ListingType","ListingDuration"];
+function listingToRow(l) {
+  return [
+    "Add", l.sku||"", l.title||"",
+    (l.description||"").replace(/\n/g," "),
+    (l.photos||[]).join("|"),
+    l.category||"0", l.price||"", l.qty||"1",
+    l.conditionId||"3000", "USPSFirstClass",
+    l.shipCost||"4.99", "US","0","USD","FixedPrice","GTC"
+  ];
+}
+function downloadCSV(listings, filename="ebay_listings") {
+  const rows = [CSV_HEADERS, ...listings.map(l => listingToRow(l).map(v=>`"${String(v).replace(/"/g,'""')}"`))]
+    .map(r=>r.join(",")).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([rows],{type:"text/csv"}));
+  a.download = `${filename}_${Date.now()}.csv`;
+  a.click();
+}
+
+// ── NAV ───────────────────────────────────────────────────────────────────────
+const TABS = ["Dashboard","Inventory","Listing AI","Queue","Promoted","PPC","Settings"];
+const ICONS = ["📊","📦","✏️","📋","📣","🔍","⚙️"];
+
+export default function App() {
+  const [tab, setTab] = useState(0);
+  const [inv, setInv] = useState([]);
+  const [queue, setQueue] = useState([]);
+  const [r2cfg, setR2cfg] = useState({ accountId:"", accessKey:"", secretKey:"", bucket:"", publicUrl:"" });
+
+  useEffect(() => {
+    (async () => {
+      setInv(await load("ecc_inventory") || SEED_INV);
+      setQueue(await load("ecc_queue") || []);
+      setR2cfg(await load("ecc_r2cfg") || { accountId:"", accessKey:"", secretKey:"", bucket:"", publicUrl:"" });
+    })();
+  }, []);
+
+  const updateInv = async v => { setInv(v); await save("ecc_inventory", v); };
+  const updateQueue = async v => { setQueue(v); await save("ecc_queue", v); };
+  const updateR2 = async v => { setR2cfg(v); await save("ecc_r2cfg", v); };
+
+  const addToQueue = (listing) => {
+    const nq = [...queue, listing];
+    updateQueue(nq);
+    setTab(3);
+  };
+
+  return (
+    <div style={{fontFamily:"system-ui,sans-serif",background:"#0f0f1a",minHeight:"100vh",color:"#e2e8f0",maxWidth:480,margin:"0 auto"}}>
+      <div style={{background:"linear-gradient(135deg,#1a1a3e,#2d1b69)",padding:"16px",borderBottom:"1px solid #2d2d5e"}}>
+        <div style={{fontSize:20,fontWeight:700,color:"#a78bfa"}}>⚡ eBay Command Center</div>
+        <div style={{fontSize:11,color:"#7c7ca0",marginTop:2}}>Phoenix CommandOps · v2 · R2 + Bulk CSV</div>
+      </div>
+      <div style={{padding:"16px",paddingBottom:90}}>
+        {tab===0 && <Dashboard inv={inv} queue={queue} />}
+        {tab===1 && <Inventory inv={inv} updateInv={updateInv} />}
+        {tab===2 && <ListingAI inv={inv} updateInv={updateInv} r2cfg={r2cfg} addToQueue={addToQueue} />}
+        {tab===3 && <Queue queue={queue} updateQueue={updateQueue} />}
+        {tab===4 && <Promoted />}
+        {tab===5 && <PPC />}
+        {tab===6 && <Settings r2cfg={r2cfg} updateR2={updateR2} />}
+      </div>
+      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:"#12122a",borderTop:"1px solid #2d2d5e",display:"flex",overflowX:"auto"}}>
+        {TABS.map((t,i)=>(
+          <button key={i} onClick={()=>setTab(i)}
+            style={{flex:"0 0 auto",minWidth:60,padding:"8px 4px",background:"none",border:"none",color:tab===i?"#a78bfa":"#5a5a8a",fontSize:9,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:1,position:"relative"}}>
+            <span style={{fontSize:16}}>{ICONS[i]}</span>{t}
+            {i===3 && queue.length>0 && <span style={{position:"absolute",top:4,right:8,background:"#f87171",borderRadius:10,fontSize:9,padding:"1px 5px",color:"#fff"}}>{queue.length}</span>}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── DASHBOARD ─────────────────────────────────────────────────────────────────
+function Dashboard({ inv, queue }) {
+  const active = inv.filter(i=>i.status==="active").length;
+  const outStock = inv.filter(i=>i.qty===0).length;
+  const lowStock = inv.filter(i=>i.qty>0&&i.qty<=2).length;
+  const totalSold = inv.reduce((s,i)=>s+i.sold,0);
+  const revenue = inv.reduce((s,i)=>s+(i.sold*i.price),0);
+  const Card = ({label,value,sub,color})=>(
+    <div style={{background:"#1a1a3e",borderRadius:12,padding:"14px",border:`1px solid ${color}30`}}>
+      <div style={{fontSize:22,fontWeight:700,color}}>{value}</div>
+      <div style={{fontSize:12,color:"#a0a0c0",marginTop:2}}>{label}</div>
+      {sub&&<div style={{fontSize:10,color:"#6060a0",marginTop:4}}>{sub}</div>}
+    </div>
+  );
+  return (
+    <div>
+      <div style={{fontSize:15,fontWeight:600,marginBottom:14,color:"#c4b5fd"}}>📊 Snapshot</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+        <Card label="Active Listings" value={active} color="#a78bfa"/>
+        <Card label="Total Revenue" value={`$${revenue.toFixed(0)}`} sub="from sold items" color="#34d399"/>
+        <Card label="Items Sold" value={totalSold} color="#60a5fa"/>
+        <Card label="Out of Stock" value={outStock} sub={`${lowStock} low stock`} color={outStock>0?"#f87171":"#a78bfa"}/>
+      </div>
+      {queue.length>0&&(
+        <div style={{background:"#1a1a2e",borderRadius:12,padding:14,marginBottom:12,border:"1px solid #a78bfa40"}}>
+          <div style={{fontSize:12,color:"#a78bfa",fontWeight:600,marginBottom:4}}>📋 Queue: {queue.length} listing{queue.length!==1?"s":""} ready</div>
+          <div style={{fontSize:11,color:"#6060a0"}}>Go to Queue tab to download bulk CSV</div>
+        </div>
+      )}
+      {outStock>0&&(
+        <div style={{background:"#3b1515",border:"1px solid #7f1d1d",borderRadius:10,padding:12}}>
+          <div style={{fontSize:12,color:"#fca5a5",fontWeight:600}}>⚠️ Low / Out of Stock</div>
+          {inv.filter(i=>i.qty<=2).map(i=>(
+            <div key={i.sku} style={{fontSize:11,color:"#fca5a5",marginTop:4}}>· {i.sku} — {i.title} ({i.qty} left)</div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── INVENTORY ─────────────────────────────────────────────────────────────────
+function Inventory({ inv, updateInv }) {
+  const [search, setSearch] = useState("");
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState({});
+  const [showAdd, setShowAdd] = useState(false);
+  const [newItem, setNewItem] = useState({sku:"",title:"",type:"own",qty:1,price:"",status:"active",sold:0,category:"",photos:[]});
+  const filtered = inv.filter(i=>i.sku.toLowerCase().includes(search.toLowerCase())||i.title.toLowerCase().includes(search.toLowerCase()));
+  const startEdit = item => { setEditing(item.sku); setForm({...item}); };
+  const saveEdit = () => { updateInv(inv.map(i=>i.sku===editing?{...form,qty:Number(form.qty),price:Number(form.price),sold:Number(form.sold)}:i)); setEditing(null); };
+  const deleteItem = sku => updateInv(inv.filter(i=>i.sku!==sku));
+  const addItem = () => { if(!newItem.sku||!newItem.title) return; updateInv([...inv,{...newItem,qty:Number(newItem.qty),price:Number(newItem.price),photos:[]}]); setShowAdd(false); setNewItem({sku:"",title:"",type:"own",qty:1,price:"",status:"active",sold:0,category:"",photos:[]}); };
+  const SI = (val,onChange)=>(<input value={val} onChange={e=>onChange(e.target.value)} style={{background:"#0f0f1a",border:"1px solid #3d3d6e",borderRadius:6,color:"#e2e8f0",padding:"6px 8px",width:"100%",fontSize:12,boxSizing:"border-box"}}/>);
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div style={{fontSize:15,fontWeight:600,color:"#c4b5fd"}}>📦 Inventory</div>
+        <button onClick={()=>setShowAdd(!showAdd)} style={{background:"#a78bfa",border:"none",borderRadius:8,color:"#fff",padding:"6px 12px",fontSize:12,cursor:"pointer"}}>+ Add</button>
+      </div>
+      <input placeholder="Search SKU or title..." value={search} onChange={e=>setSearch(e.target.value)}
+        style={{width:"100%",background:"#1a1a3e",border:"1px solid #2d2d5e",borderRadius:10,color:"#e2e8f0",padding:"10px 12px",fontSize:13,marginBottom:12,boxSizing:"border-box"}}/>
+      {showAdd&&(
+        <div style={{background:"#1a1a3e",borderRadius:12,padding:14,marginBottom:12,border:"1px solid #a78bfa50"}}>
+          <div style={{fontSize:12,color:"#a78bfa",marginBottom:8,fontWeight:600}}>New Item</div>
+          <div style={{display:"grid",gap:8}}>
+            {[["SKU","sku"],["Title","title"],["Category","category"]].map(([l,k])=>(
+              <div key={k}><div style={{fontSize:10,color:"#7070a0",marginBottom:2}}>{l}</div>{SI(newItem[k],v=>setNewItem(p=>({...p,[k]:v})))}</div>
+            ))}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <div><div style={{fontSize:10,color:"#7070a0",marginBottom:2}}>Price</div>{SI(newItem.price,v=>setNewItem(p=>({...p,price:v})))}</div>
+              <div><div style={{fontSize:10,color:"#7070a0",marginBottom:2}}>Qty</div>{SI(newItem.qty,v=>setNewItem(p=>({...p,qty:v})))}</div>
+            </div>
+            <select value={newItem.type} onChange={e=>setNewItem(p=>({...p,type:e.target.value}))} style={{background:"#0f0f1a",border:"1px solid #3d3d6e",borderRadius:6,color:"#e2e8f0",padding:"6px 8px",fontSize:12}}>
+              <option value="own">Own Stock (OWN-)</option><option value="dropship">Dropship (DS-)</option>
+            </select>
+            <button onClick={addItem} style={{background:"#a78bfa",border:"none",borderRadius:8,color:"#fff",padding:"8px",fontSize:12,cursor:"pointer",fontWeight:600}}>Save Item</button>
+          </div>
+        </div>
+      )}
+      {filtered.map(item=>(
+        <div key={item.sku} style={{background:"#1a1a3e",borderRadius:12,padding:12,marginBottom:10,border:`1px solid ${item.qty===0?"#7f1d1d":"#2d2d5e"}`}}>
+          {editing===item.sku?(
+            <div style={{display:"grid",gap:8}}>
+              {[["Title","title"],["Category","category"]].map(([l,k])=>(<div key={k}><div style={{fontSize:10,color:"#7070a0",marginBottom:2}}>{l}</div>{SI(form[k],v=>setForm(p=>({...p,[k]:v})))}</div>))}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                {[["Price","price"],["Qty","qty"],["Sold","sold"]].map(([l,k])=>(<div key={k}><div style={{fontSize:10,color:"#7070a0",marginBottom:2}}>{l}</div>{SI(form[k],v=>setForm(p=>({...p,[k]:v})))}</div>))}
+              </div>
+              <select value={form.status} onChange={e=>setForm(p=>({...p,status:e.target.value}))} style={{background:"#0f0f1a",border:"1px solid #3d3d6e",borderRadius:6,color:"#e2e8f0",padding:"6px 8px",fontSize:12}}>
+                <option value="active">Active</option><option value="ended">Ended</option><option value="out">Out of Stock</option>
+              </select>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={saveEdit} style={{flex:1,background:"#34d399",border:"none",borderRadius:8,color:"#000",padding:"8px",fontSize:12,cursor:"pointer",fontWeight:600}}>Save</button>
+                <button onClick={()=>setEditing(null)} style={{flex:1,background:"#374151",border:"none",borderRadius:8,color:"#fff",padding:"8px",fontSize:12,cursor:"pointer"}}>Cancel</button>
+              </div>
+            </div>
+          ):(
+            <>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                <div>
+                  <div style={{fontSize:11,color:item.type==="own"?"#a78bfa":"#60a5fa",fontWeight:600}}>{item.sku}</div>
+                  <div style={{fontSize:13,color:"#e2e8f0",marginTop:2}}>{item.title}</div>
+                  <div style={{fontSize:11,color:"#6060a0",marginTop:2}}>{item.category}</div>
+                  {item.photos&&item.photos.length>0&&<div style={{fontSize:10,color:"#34d399",marginTop:2}}>📷 {item.photos.length} photo{item.photos.length!==1?"s":""}</div>}
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:15,fontWeight:700,color:"#34d399"}}>${item.price}</div>
+                  <div style={{fontSize:10,color:item.qty===0?"#f87171":item.qty<=2?"#fbbf24":"#a0a0c0",marginTop:2}}>{item.qty===0?"OUT":"Qty: "+item.qty}</div>
+                </div>
+              </div>
+              <div style={{display:"flex",gap:8,marginTop:10}}>
+                <button onClick={()=>startEdit(item)} style={{flex:1,background:"#2d2d5e",border:"none",borderRadius:8,color:"#a78bfa",padding:"6px",fontSize:11,cursor:"pointer"}}>Edit</button>
+                <button onClick={()=>deleteItem(item.sku)} style={{background:"#3b1515",border:"none",borderRadius:8,color:"#f87171",padding:"6px 10px",fontSize:11,cursor:"pointer"}}>✕</button>
+              </div>
+            </>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── LISTING AI ────────────────────────────────────────────────────────────────
+function ListingAI({ inv, updateInv, r2cfg, addToQueue }) {
+  const [desc, setDesc] = useState("");
+  const [price, setPrice] = useState("");
+  const [qty, setQty] = useState("1");
+  const [shipCost, setShipCost] = useState("4.99");
+  const [condition, setCondition] = useState("3000");
+  const [skuType, setSkuType] = useState("OWN");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [photos, setPhotos] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState("");
+  const fileRef = useRef();
+  const r2Ready = r2cfg.accountId && r2cfg.accessKey && r2cfg.secretKey && r2cfg.bucket && r2cfg.publicUrl;
+
+  const CONDITIONS=[["1000","New"],["1500","New other"],["2000","Mfr refurb"],["2500","Seller refurb"],["3000","Used"],["4000","Very Good"],["5000","Good"],["6000","Acceptable"],["7000","For parts"]];
+
+  const nextSku = () => {
+    const prefix = skuType+"-";
+    const existing = inv.filter(i=>i.sku.startsWith(prefix)).map(i=>parseInt(i.sku.replace(prefix,""))||0);
+    return `${prefix}${String((existing.length?Math.max(...existing):0)+1).padStart(5,"0")}`;
+  };
+
+  const handlePhotos = async (files) => {
+    if (!r2Ready) { setUploadStatus("⚠️ Configure R2 in Settings first"); return; }
+    setUploading(true);
+    const urls = [];
+    for (const f of Array.from(files)) {
+      try {
+        setUploadStatus(`Uploading ${f.name}...`);
+        const url = await uploadToR2(f, r2cfg);
+        urls.push(url);
+      } catch(e) { setUploadStatus(`❌ Failed: ${f.name}`); }
+    }
+    setPhotos(p=>[...p,...urls]);
+    setUploadStatus(`✅ ${urls.length} photo${urls.length!==1?"s":""} uploaded`);
+    setUploading(false);
+  };
+
+  const generate = async () => {
+    if (!desc.trim()) return;
+    setLoading(true); setResult(null);
+    try {
+      const sku = nextSku();
+      const text = await callClaude(
+        `Create an eBay listing for: "${desc}"\nRespond ONLY with JSON:\n{"title":"(max 80 chars)","description":"(3-4 sentences)","suggestedCategory":"(eBay category)","keywords":["k1","k2","k3","k4","k5"]}`,
+        "You are an expert eBay seller. Return only valid JSON, no backticks."
+      );
+      const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+      setResult({...parsed, sku, price, qty, shipCost, conditionId:condition, photos, category:parsed.suggestedCategory});
+    } catch { setResult({error:"Generation failed. Try again."}); }
+    setLoading(false);
+  };
+
+  const handleAddToQueue = () => {
+    if (!result||result.error) return;
+    addToQueue(result);
+    setResult(null); setDesc(""); setPhotos([]); setUploadStatus("");
+  };
+
+  const handleDownloadSingle = () => { if (result&&!result.error) downloadCSV([result],"ebay_listing"); };
+
+  const inp=(label,val,set,ph="")=>(
+    <div style={{marginBottom:10}}>
+      <div style={{fontSize:11,color:"#7070a0",marginBottom:4}}>{label}</div>
+      <input value={val} onChange={e=>set(e.target.value)} placeholder={ph}
+        style={{width:"100%",background:"#1a1a3e",border:"1px solid #2d2d5e",borderRadius:8,color:"#e2e8f0",padding:"10px 12px",fontSize:13,boxSizing:"border-box"}}/>
+    </div>
+  );
+
+  return (
+    <div>
+      <div style={{fontSize:15,fontWeight:600,marginBottom:14,color:"#c4b5fd"}}>✏️ AI Listing Generator</div>
+      <div style={{background:"#1a1a3e",borderRadius:12,padding:14,marginBottom:12,border:"1px solid #2d2d5e"}}>
+        <div style={{fontSize:11,color:"#7070a0",marginBottom:4}}>Item Description</div>
+        <textarea value={desc} onChange={e=>setDesc(e.target.value)} placeholder="e.g. Vintage Craftsman socket set, used, complete, chrome, 1/2 drive"
+          style={{width:"100%",background:"#0f0f1a",border:"1px solid #3d3d6e",borderRadius:8,color:"#e2e8f0",padding:"10px 12px",fontSize:13,minHeight:70,resize:"vertical",boxSizing:"border-box",marginBottom:10}}/>
+
+        {/* Photo Upload */}
+        <div style={{marginBottom:12}}>
+          <div style={{fontSize:11,color:"#7070a0",marginBottom:6}}>📷 Photos {!r2Ready&&<span style={{color:"#f87171"}}>(configure R2 in Settings)</span>}</div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:6}}>
+            {photos.map((url,i)=>(
+              <div key={i} style={{position:"relative"}}>
+                <img src={url} alt="" style={{width:60,height:60,objectFit:"cover",borderRadius:8,border:"1px solid #3d3d6e"}}/>
+                <button onClick={()=>setPhotos(p=>p.filter((_,j)=>j!==i))}
+                  style={{position:"absolute",top:-4,right:-4,background:"#f87171",border:"none",borderRadius:"50%",width:18,height:18,color:"#fff",fontSize:10,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+              </div>
+            ))}
+            <button onClick={()=>fileRef.current?.click()} disabled={uploading||!r2Ready}
+              style={{width:60,height:60,background:"#0f0f1a",border:"2px dashed #3d3d6e",borderRadius:8,color:"#a78bfa",fontSize:22,cursor:r2Ready?"pointer":"not-allowed",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              {uploading?"⏳":"+"}
+            </button>
+          </div>
+          <input ref={fileRef} type="file" accept="image/*" multiple capture="environment" style={{display:"none"}}
+            onChange={e=>handlePhotos(e.target.files)}/>
+          {uploadStatus&&<div style={{fontSize:11,color:uploadStatus.startsWith("✅")?"#34d399":uploadStatus.startsWith("❌")?"#f87171":"#fbbf24"}}>{uploadStatus}</div>}
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div>{inp("Price ($)",price,setPrice,"24.99")}</div>
+          <div>{inp("Quantity",qty,setQty,"1")}</div>
+        </div>
+        {inp("Shipping Cost ($)",shipCost,setShipCost,"4.99")}
+
+        <div style={{marginBottom:10}}>
+          <div style={{fontSize:11,color:"#7070a0",marginBottom:4}}>Condition</div>
+          <select value={condition} onChange={e=>setCondition(e.target.value)}
+            style={{width:"100%",background:"#1a1a3e",border:"1px solid #2d2d5e",borderRadius:8,color:"#e2e8f0",padding:"10px 12px",fontSize:13}}>
+            {CONDITIONS.map(([v,l])=><option key={v} value={v}>{l}</option>)}
+          </select>
+        </div>
+
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:11,color:"#7070a0",marginBottom:4}}>SKU Type</div>
+          <div style={{display:"flex",gap:8}}>
+            {["OWN","DS"].map(t=>(
+              <button key={t} onClick={()=>setSkuType(t)}
+                style={{flex:1,padding:"8px",border:"none",borderRadius:8,cursor:"pointer",fontWeight:600,fontSize:12,
+                  background:skuType===t?"#a78bfa":"#2d2d5e",color:skuType===t?"#fff":"#a0a0c0"}}>
+                {t==="OWN"?"Own Stock":"Dropship"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <button onClick={generate} disabled={loading||!desc.trim()}
+          style={{width:"100%",background:loading?"#4a3a7a":"linear-gradient(135deg,#7c3aed,#a78bfa)",border:"none",borderRadius:10,color:"#fff",padding:"12px",fontSize:14,fontWeight:700,cursor:loading?"wait":"pointer"}}>
+          {loading?"⚡ Generating...":"⚡ Generate Listing"}
+        </button>
+      </div>
+
+      {result&&!result.error&&(
+        <div style={{background:"#1a1a3e",borderRadius:12,padding:14,border:"1px solid #34d39950"}}>
+          <div style={{fontSize:12,color:"#34d399",fontWeight:600,marginBottom:10}}>✅ Ready — {result.sku}</div>
+          <div style={{fontSize:11,color:"#7070a0",marginBottom:2}}>Title</div>
+          <div style={{fontSize:13,color:"#e2e8f0",marginBottom:10,fontWeight:600}}>{result.title}</div>
+          <div style={{fontSize:11,color:"#7070a0",marginBottom:2}}>Description</div>
+          <div style={{fontSize:12,color:"#c4c4e0",marginBottom:10,lineHeight:1.6}}>{result.description}</div>
+          <div style={{fontSize:11,color:"#7070a0",marginBottom:2}}>Category</div>
+          <div style={{fontSize:12,color:"#a78bfa",marginBottom:10}}>{result.suggestedCategory}</div>
+          {result.photos&&result.photos.length>0&&(
+            <div style={{marginBottom:10}}>
+              <div style={{fontSize:11,color:"#7070a0",marginBottom:4}}>Photos ({result.photos.length})</div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {result.photos.map((u,i)=><img key={i} src={u} alt="" style={{width:56,height:56,objectFit:"cover",borderRadius:8,border:"1px solid #3d3d6e"}}/>)}
+              </div>
+            </div>
+          )}
+          <div style={{fontSize:11,color:"#7070a0",marginBottom:6}}>Keywords</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>
+            {(result.keywords||[]).map((k,i)=><span key={i} style={{background:"#2d2d5e",borderRadius:20,padding:"3px 10px",fontSize:11,color:"#a78bfa"}}>{k}</span>)}
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={handleDownloadSingle}
+              style={{flex:1,background:"linear-gradient(135deg,#059669,#34d399)",border:"none",borderRadius:10,color:"#fff",padding:"11px",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+              ⬇ CSV
+            </button>
+            <button onClick={handleAddToQueue}
+              style={{flex:1,background:"linear-gradient(135deg,#7c3aed,#a78bfa)",border:"none",borderRadius:10,color:"#fff",padding:"11px",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+              + Queue
+            </button>
+          </div>
+        </div>
+      )}
+      {result?.error&&<div style={{background:"#3b1515",borderRadius:10,padding:12,color:"#fca5a5",fontSize:13}}>{result.error}</div>}
+    </div>
+  );
+}
+
+// ── QUEUE ─────────────────────────────────────────────────────────────────────
+function Queue({ queue, updateQueue }) {
+  const remove = i => updateQueue(queue.filter((_,j)=>j!==i));
+  const clear = () => updateQueue([]);
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+        <div style={{fontSize:15,fontWeight:600,color:"#c4b5fd"}}>📋 Listing Queue ({queue.length})</div>
+        {queue.length>0&&<button onClick={clear} style={{background:"#3b1515",border:"none",borderRadius:8,color:"#f87171",padding:"6px 12px",fontSize:12,cursor:"pointer"}}>Clear All</button>}
+      </div>
+
+      {queue.length===0&&(
+        <div style={{background:"#1a1a3e",borderRadius:12,padding:24,textAlign:"center",border:"1px solid #2d2d5e"}}>
+          <div style={{fontSize:32,marginBottom:8}}>📋</div>
+          <div style={{fontSize:13,color:"#6060a0"}}>No listings queued yet.<br/>Generate listings and tap "+ Queue"</div>
+        </div>
+      )}
+
+      {queue.map((item,i)=>(
+        <div key={i} style={{background:"#1a1a3e",borderRadius:12,padding:12,marginBottom:10,border:"1px solid #2d2d5e"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+            <div style={{flex:1}}>
+              <div style={{fontSize:11,color:"#a78bfa",fontWeight:600}}>{item.sku}</div>
+              <div style={{fontSize:13,color:"#e2e8f0",marginTop:2}}>{item.title}</div>
+              <div style={{fontSize:11,color:"#6060a0",marginTop:2}}>${item.price} · Qty {item.qty} · Ship ${item.shipCost}</div>
+              {item.photos&&item.photos.length>0&&<div style={{fontSize:10,color:"#34d399",marginTop:2}}>📷 {item.photos.length} photo{item.photos.length!==1?"s":""}</div>}
+            </div>
+            <button onClick={()=>remove(i)} style={{background:"#3b1515",border:"none",borderRadius:8,color:"#f87171",padding:"6px 10px",fontSize:11,cursor:"pointer",marginLeft:8}}>✕</button>
+          </div>
+        </div>
+      ))}
+
+      {queue.length>0&&(
+        <button onClick={()=>downloadCSV(queue,"ebay_bulk")}
+          style={{width:"100%",background:"linear-gradient(135deg,#059669,#34d399)",border:"none",borderRadius:12,color:"#fff",padding:"14px",fontSize:15,fontWeight:700,cursor:"pointer",marginTop:4}}>
+          ⬇ Download Bulk CSV ({queue.length} listing{queue.length!==1?"s":""})
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── PROMOTED ──────────────────────────────────────────────────────────────────
+function Promoted() {
+  const [category,setCategory]=useState("");const [price,setPrice]=useState("");const [loading,setLoading]=useState(false);const [advice,setAdvice]=useState("");
+  const getAdvice=async()=>{if(!category)return;setLoading(true);setAdvice("");const t=await callClaude(`I sell on eBay in "${category}", avg price $${price||"unknown"}. Give:\n1. Recommended ad rate % and why\n2. Best promotion timing\n3. Budget strategy for small seller\n4. Category-specific tips\nBe specific and actionable.`,"You are an eBay advertising expert.");setAdvice(t);setLoading(false);};
+  return (
+    <div>
+      <div style={{fontSize:15,fontWeight:600,marginBottom:14,color:"#c4b5fd"}}>📣 Promoted Listings Advisor</div>
+      <div style={{background:"#1a1a3e",borderRadius:12,padding:14,marginBottom:12,border:"1px solid #2d2d5e"}}>
+        <div style={{fontSize:11,color:"#7070a0",marginBottom:4}}>Category</div>
+        <input value={category} onChange={e=>setCategory(e.target.value)} placeholder="e.g. Tools, Collectibles, Electronics"
+          style={{width:"100%",background:"#0f0f1a",border:"1px solid #3d3d6e",borderRadius:8,color:"#e2e8f0",padding:"10px 12px",fontSize:13,marginBottom:10,boxSizing:"border-box"}}/>
+        <div style={{fontSize:11,color:"#7070a0",marginBottom:4}}>Average Item Price</div>
+        <input value={price} onChange={e=>setPrice(e.target.value)} placeholder="e.g. 25"
+          style={{width:"100%",background:"#0f0f1a",border:"1px solid #3d3d6e",borderRadius:8,color:"#e2e8f0",padding:"10px 12px",fontSize:13,marginBottom:12,boxSizing:"border-box"}}/>
+        <button onClick={getAdvice} disabled={loading||!category}
+          style={{width:"100%",background:"linear-gradient(135deg,#7c3aed,#a78bfa)",border:"none",borderRadius:10,color:"#fff",padding:"12px",fontSize:14,fontWeight:700,cursor:loading?"wait":"pointer"}}>
+          {loading?"Analyzing...":"Get Ad Strategy"}
+        </button>
+      </div>
+      {advice&&<div style={{background:"#1a1a3e",borderRadius:12,padding:14,border:"1px solid #a78bfa40"}}><div style={{fontSize:12,color:"#a78bfa",fontWeight:600,marginBottom:10}}>📣 Strategy</div><div style={{fontSize:12,color:"#c4c4e0",lineHeight:1.8,whiteSpace:"pre-wrap"}}>{advice}</div></div>}
+    </div>
+  );
+}
+
+// ── PPC ────────────────────────────────────────────────────────────────────────
+function PPC() {
+  const [item,setItem]=useState("");const [loading,setLoading]=useState(false);const [kw,setKw]=useState(null);
+  const getKw=async()=>{if(!item)return;setLoading(true);setKw(null);const t=await callClaude(`eBay PPC keywords for: "${item}"\nReturn ONLY JSON:\n{"primary":["k1","k2","k3"],"longtail":["p1","p2","p3","p4"],"negative":["n1","n2","n3"],"bidStrategy":"paragraph","searchTitle":"optimized title"}`,"Return only valid JSON.");try{setKw(JSON.parse(t.replace(/```json|```/g,"").trim()));}catch{setKw({error:"Parse failed."});}setLoading(false);};
+  return (
+    <div>
+      <div style={{fontSize:15,fontWeight:600,marginBottom:14,color:"#c4b5fd"}}>🔍 PPC Keywords</div>
+      <div style={{background:"#1a1a3e",borderRadius:12,padding:14,marginBottom:12,border:"1px solid #2d2d5e"}}>
+        <div style={{fontSize:11,color:"#7070a0",marginBottom:4}}>Item / Listing</div>
+        <input value={item} onChange={e=>setItem(e.target.value)} placeholder="e.g. DeWalt 20V cordless drill set"
+          style={{width:"100%",background:"#0f0f1a",border:"1px solid #3d3d6e",borderRadius:8,color:"#e2e8f0",padding:"10px 12px",fontSize:13,marginBottom:12,boxSizing:"border-box"}}/>
+        <button onClick={getKw} disabled={loading||!item}
+          style={{width:"100%",background:"linear-gradient(135deg,#0891b2,#60a5fa)",border:"none",borderRadius:10,color:"#fff",padding:"12px",fontSize:14,fontWeight:700,cursor:loading?"wait":"pointer"}}>
+          {loading?"Finding...":"Generate Keywords"}
+        </button>
+      </div>
+      {kw&&!kw.error&&(
+        <div style={{display:"grid",gap:10}}>
+          {[["🎯 Primary",kw.primary,"#a78bfa"],["🔎 Long-tail",kw.longtail,"#60a5fa"],["🚫 Negative",kw.negative,"#f87171"]].map(([l,keys,c])=>(
+            <div key={l} style={{background:"#1a1a3e",borderRadius:12,padding:14,border:"1px solid #2d2d5e"}}>
+              <div style={{fontSize:12,color:c,fontWeight:600,marginBottom:8}}>{l}</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>{(keys||[]).map((k,i)=><span key={i} style={{background:"#0f0f1a",border:`1px solid ${c}40`,borderRadius:20,padding:"4px 10px",fontSize:11,color:c}}>{k}</span>)}</div>
+            </div>
+          ))}
+          {kw.searchTitle&&<div style={{background:"#1a1a3e",borderRadius:12,padding:14,border:"1px solid #34d39940"}}><div style={{fontSize:12,color:"#34d399",fontWeight:600,marginBottom:6}}>✅ Optimized Title</div><div style={{fontSize:13,color:"#e2e8f0"}}>{kw.searchTitle}</div></div>}
+          {kw.bidStrategy&&<div style={{background:"#1a1a3e",borderRadius:12,padding:14,border:"1px solid #2d2d5e"}}><div style={{fontSize:12,color:"#fbbf24",fontWeight:600,marginBottom:6}}>💡 Bid Strategy</div><div style={{fontSize:12,color:"#c4c4e0",lineHeight:1.7}}>{kw.bidStrategy}</div></div>}
+        </div>
+      )}
+      {kw?.error&&<div style={{background:"#3b1515",borderRadius:10,padding:12,color:"#fca5a5",fontSize:13}}>{kw.error}</div>}
+    </div>
+  );
+}
+
+// ── SETTINGS ──────────────────────────────────────────────────────────────────
+function Settings({ r2cfg, updateR2 }) {
+  const [form, setForm] = useState(r2cfg);
+  const [saved, setSaved] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState("");
+  useEffect(()=>{ setForm(r2cfg); },[r2cfg]);
+  const save = async () => { await updateR2(form); setSaved(true); setTimeout(()=>setSaved(false),2000); };
+  const test = async () => {
+    setTesting(true); setTestResult("");
+    try {
+      const blob = new Blob(["test"],{type:"text/plain"});
+      const f = new File([blob],"r2_test.txt",{type:"text/plain"});
+      const url = await uploadToR2(f, form);
+      setTestResult(`✅ Connected! Test file: ${url}`);
+    } catch(e) { setTestResult(`❌ Failed: ${e.message}`); }
+    setTesting(false);
+  };
+  const Field = ({label,k,placeholder,secret})=>(
+    <div style={{marginBottom:12}}>
+      <div style={{fontSize:11,color:"#7070a0",marginBottom:4}}>{label}</div>
+      <input type={secret?"password":"text"} value={form[k]||""} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))} placeholder={placeholder}
+        style={{width:"100%",background:"#0f0f1a",border:"1px solid #3d3d6e",borderRadius:8,color:"#e2e8f0",padding:"10px 12px",fontSize:13,boxSizing:"border-box"}}/>
+    </div>
+  );
+  return (
+    <div>
+      <div style={{fontSize:15,fontWeight:600,marginBottom:4,color:"#c4b5fd"}}>⚙️ Settings</div>
+      <div style={{fontSize:11,color:"#6060a0",marginBottom:14}}>Cloudflare R2 — photo storage</div>
+      <div style={{background:"#1a1a3e",borderRadius:12,padding:14,marginBottom:12,border:"1px solid #2d2d5e"}}>
+        <div style={{fontSize:12,color:"#a78bfa",fontWeight:600,marginBottom:12}}>☁️ Cloudflare R2 Credentials</div>
+        <Field label="Account ID" k="accountId" placeholder="abc123def456..."/>
+        <Field label="Access Key ID" k="accessKey" placeholder="R2 Access Key ID"/>
+        <Field label="Secret Access Key" k="secretKey" placeholder="R2 Secret Key" secret/>
+        <Field label="Bucket Name" k="bucket" placeholder="ebay-photos"/>
+        <Field label="Public URL" k="publicUrl" placeholder="https://pub-xxx.r2.dev"/>
+        <div style={{display:"flex",gap:8,marginTop:4}}>
+          <button onClick={save} style={{flex:1,background:"linear-gradient(135deg,#7c3aed,#a78bfa)",border:"none",borderRadius:10,color:"#fff",padding:"11px",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+            {saved?"✅ Saved!":"Save Settings"}
+          </button>
+          <button onClick={test} disabled={testing||!form.accountId}
+            style={{flex:1,background:"#1a1a3e",border:"1px solid #a78bfa",borderRadius:10,color:"#a78bfa",padding:"11px",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+            {testing?"Testing...":"Test R2"}
+          </button>
+        </div>
+        {testResult&&<div style={{marginTop:10,fontSize:11,color:testResult.startsWith("✅")?"#34d399":"#f87171",lineHeight:1.5}}>{testResult}</div>}
+      </div>
+      <div style={{background:"#1a1a3e",borderRadius:12,padding:14,border:"1px solid #2d2d5e"}}>
+        <div style={{fontSize:12,color:"#a78bfa",fontWeight:600,marginBottom:8}}>📋 R2 Setup Guide</div>
+        <div style={{fontSize:11,color:"#8080a0",lineHeight:1.8}}>
+          1. Go to <span style={{color:"#60a5fa"}}>dash.cloudflare.com</span> → R2{"\n"}
+          2. Create a bucket (e.g. <span style={{color:"#a78bfa"}}>ebay-photos</span>){"\n"}
+          3. Settings → Public access → Enable{"\n"}
+          4. Manage R2 API tokens → Create token{"\n"}
+          5. Copy Account ID from R2 overview{"\n"}
+          6. Paste all values above → Save → Test
+        </div>
+      </div>
+    </div>
+  );
+}

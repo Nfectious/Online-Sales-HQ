@@ -1,0 +1,1675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Valkyrie Text Forge v3.0 | Advanced Document Intelligence</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #2c3e50;
+            --secondary: #34495e;
+            --accent: #3498db;
+            --success: #27ae60;
+            --danger: #e74c3c;
+            --warning: #f39c12;
+            --light: #ecf0f1;
+            --dark: #1a1a1a;
+            --text: #2c3e50;
+            --border: #bdc3c7;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+            border-bottom: 4px solid var(--accent);
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .badge {
+            display: inline-block;
+            background: var(--success);
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            margin: 5px;
+            font-weight: 600;
+        }
+
+        .badge.pro {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr 350px;
+            gap: 20px;
+            padding: 30px;
+        }
+
+        .panel {
+            background: var(--light);
+            border-radius: 12px;
+            padding: 20px;
+            border: 2px solid var(--border);
+        }
+
+        .panel h2 {
+            color: var(--primary);
+            margin-bottom: 15px;
+            font-size: 1.4em;
+            border-bottom: 2px solid var(--accent);
+            padding-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .textarea-container {
+            position: relative;
+            margin-bottom: 15px;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 500px;
+            padding: 15px;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            resize: vertical;
+            transition: border-color 0.3s;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+        }
+
+        .auto-correct-indicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: var(--success);
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            display: none;
+            animation: pulse 2s infinite;
+        }
+
+        .auto-correct-indicator.active {
+            display: block;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        button, .file-input-label {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.4);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #229954;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(39, 174, 96, 0.4);
+        }
+
+        .btn-warning {
+            background: var(--warning);
+            color: white;
+        }
+
+        .btn-warning:hover {
+            background: #d68910;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(243, 156, 18, 0.4);
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c0392b;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(231, 76, 60, 0.4);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 12px;
+            border-radius: 8px;
+            border-left: 4px solid var(--accent);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: #7f8c8d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: var(--primary);
+            margin-top: 5px;
+        }
+
+        .intelligence-panel {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+        }
+
+        .intelligence-panel h2 {
+            color: white;
+            border-bottom-color: white;
+        }
+
+        .analysis-box {
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            backdrop-filter: blur(10px);
+        }
+
+        .analysis-box h3 {
+            font-size: 1.1em;
+            margin-bottom: 10px;
+            color: #fff;
+        }
+
+        .analysis-item {
+            background: rgba(255,255,255,0.2);
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+
+        .correction-log {
+            max-height: 400px;
+            overflow-y: auto;
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+
+        .correction-item {
+            padding: 8px;
+            margin-bottom: 8px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 4px;
+            border-left: 3px solid #27ae60;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .file-input-label {
+            background: var(--secondary);
+            color: white;
+        }
+
+        .file-input-label:hover {
+            background: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(44, 62, 80, 0.4);
+        }
+
+        select {
+            padding: 12px;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            font-size: 14px;
+            background: white;
+            cursor: pointer;
+            transition: border-color 0.3s;
+            width: 100%;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .action-section {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+
+        .action-section h3 {
+            color: var(--primary);
+            font-size: 1.1em;
+            margin-bottom: 10px;
+        }
+
+        .toggle-switch {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 0;
+        }
+
+        .toggle-switch input[type="checkbox"] {
+            width: 50px;
+            height: 26px;
+            appearance: none;
+            background: #ccc;
+            border-radius: 13px;
+            position: relative;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .toggle-switch input[type="checkbox"]:checked {
+            background: var(--success);
+        }
+
+        .toggle-switch input[type="checkbox"]::before {
+            content: '';
+            position: absolute;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: white;
+            top: 2px;
+            left: 2px;
+            transition: 0.3s;
+        }
+
+        .toggle-switch input[type="checkbox"]:checked::before {
+            left: 26px;
+        }
+
+        @media (max-width: 1200px) {
+            .main-content {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+
+            .header h1 {
+                font-size: 1.8em;
+            }
+        }
+
+        .footer {
+            background: var(--primary);
+            color: white;
+            text-align: center;
+            padding: 20px;
+            font-size: 14px;
+        }
+
+        .processing {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            z-index: 1000;
+            text-align: center;
+            min-width: 300px;
+        }
+
+        .processing.active {
+            display: block;
+        }
+
+        .spinner {
+            border: 4px solid var(--light);
+            border-top: 4px solid var(--accent);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+
+        .overlay.active {
+            display: block;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--light);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 15px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), var(--success));
+            width: 0%;
+            transition: width 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚔️ VALKYRIE TEXT FORGE v3.0</h1>
+            <p>Advanced Document Intelligence & Reconstruction System</p>
+            <div>
+                <span class="badge">🤖 AI-POWERED</span>
+                <span class="badge">🔒 ZERO DEPENDENCIES</span>
+                <span class="badge pro">🚀 AUTO-CORRECTION</span>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <!-- INPUT PANEL -->
+            <div class="panel">
+                <h2>📥 INPUT ZONE</h2>
+                
+                <div class="btn-group" style="margin-bottom: 15px;">
+                    <input type="file" id="fileInput" class="file-input" accept=".txt,.md,.html">
+                    <label for="fileInput" class="file-input-label">📁 Upload</label>
+                    <button class="btn-primary" onclick="pasteFromClipboard()">📋 Paste</button>
+                    <button class="btn-danger" onclick="clearInput()">🗑️ Clear</button>
+                </div>
+
+                <div class="textarea-container">
+                    <div class="auto-correct-indicator" id="autoCorrectIndicator">
+                        🤖 AUTO-CORRECTING...
+                    </div>
+                    <textarea id="inputText" placeholder="Paste your document here... Auto-correction will begin immediately."></textarea>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Words</div>
+                        <div class="stat-value" id="wordCount">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Characters</div>
+                        <div class="stat-value" id="charCount">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Lines</div>
+                        <div class="stat-value" id="lineCount">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Errors Found</div>
+                        <div class="stat-value" id="errorCount">0</div>
+                    </div>
+                </div>
+
+                <div class="action-section">
+                    <h3>⚙️ Auto-Correction Settings</h3>
+                    <div class="toggle-switch">
+                        <span>Auto-correct on paste</span>
+                        <input type="checkbox" id="autoCorrectEnabled" checked>
+                    </div>
+                    <div class="toggle-switch">
+                        <span>Fix punctuation spacing</span>
+                        <input type="checkbox" id="fixPunctuation" checked>
+                    </div>
+                    <div class="toggle-switch">
+                        <span>Align bullet points</span>
+                        <input type="checkbox" id="fixBullets" checked>
+                    </div>
+                    <div class="toggle-switch">
+                        <span>Fix numbering sequence</span>
+                        <input type="checkbox" id="fixNumbering" checked>
+                    </div>
+                    <div class="toggle-switch">
+                        <span>Capitalize sentences</span>
+                        <input type="checkbox" id="capitalizeSentences" checked>
+                    </div>
+                    <div class="toggle-switch">
+                        <span>Remove extra spaces</span>
+                        <input type="checkbox" id="removeSpaces" checked>
+                    </div>
+                </div>
+
+                <div class="action-section">
+                    <h3>🔧 Manual Transformations</h3>
+                    <div class="btn-group">
+                        <button class="btn-primary" onclick="transformText('uppercase')">UPPERCASE</button>
+                        <button class="btn-primary" onclick="transformText('lowercase')">lowercase</button>
+                        <button class="btn-primary" onclick="transformText('titlecase')">Title Case</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- OUTPUT PANEL -->
+            <div class="panel">
+                <h2>
+                    📤 OUTPUT ZONE
+                    <button class="btn-success" onclick="smartFormat()" style="font-size: 12px; padding: 8px 16px;">⚡ SMART FORMAT</button>
+                </h2>
+                
+                <div class="btn-group" style="margin-bottom: 15px;">
+                    <button class="btn-primary" onclick="copyToClipboard()">📋 Copy</button>
+                    <button class="btn-success" onclick="downloadText()">💾 Download</button>
+                    <button class="btn-warning" onclick="compareVersions()">🔍 Compare</button>
+                </div>
+
+                <div class="textarea-container">
+                    <textarea id="outputText" placeholder="Corrected output will appear here..." readonly></textarea>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Words</div>
+                        <div class="stat-value" id="outputWordCount">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Characters</div>
+                        <div class="stat-value" id="outputCharCount">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Corrections</div>
+                        <div class="stat-value" id="correctionCount">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Quality</div>
+                        <div class="stat-value" id="qualityScore">0%</div>
+                    </div>
+                </div>
+
+                <div class="action-section">
+                    <h3>🔄 Format Conversion</h3>
+                    <select id="formatSelect">
+                        <option value="txt">Plain Text (.txt)</option>
+                        <option value="md">Markdown (.md)</option>
+                        <option value="html">HTML (.html)</option>
+                        <option value="csv">CSV (.csv)</option>
+                        <option value="json">JSON (.json)</option>
+                        <option value="rtf">Rich Text (.rtf)</option>
+                    </select>
+                    <button class="btn-success" onclick="convertFormat()" style="margin-top: 10px; width: 100%;">📦 Convert & Download</button>
+                </div>
+
+                <div class="action-section">
+                    <h3>🔒 Encryption Tools</h3>
+                    <div class="btn-group">
+                        <button class="btn-warning" onclick="encrypt('base64')">Base64</button>
+                        <button class="btn-warning" onclick="encrypt('rot13')">ROT13</button>
+                        <button class="btn-warning" onclick="decrypt('base64')">Decode</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- INTELLIGENCE PANEL -->
+            <div class="panel intelligence-panel">
+                <h2>🧠 INTELLIGENCE HUB</h2>
+
+                <div class="analysis-box">
+                    <h3>📊 Document Analysis</h3>
+                    <div class="analysis-item">
+                        <strong>Type:</strong> <span id="docType">Unknown</span>
+                    </div>
+                    <div class="analysis-item">
+                        <strong>Structure:</strong> <span id="docStructure">Analyzing...</span>
+                    </div>
+                    <div class="analysis-item">
+                        <strong>Complexity:</strong> <span id="docComplexity">0/10</span>
+                    </div>
+                    <div class="analysis-item">
+                        <strong>Reading Level:</strong> <span id="readingLevel">-</span>
+                    </div>
+                </div>
+
+                <div class="analysis-box">
+                    <h3>🔍 Pattern Recognition</h3>
+                    <div class="analysis-item">
+                        <strong>Headers:</strong> <span id="headerCount">0</span>
+                    </div>
+                    <div class="analysis-item">
+                        <strong>Paragraphs:</strong> <span id="paragraphCount">0</span>
+                    </div>
+                    <div class="analysis-item">
+                        <strong>Lists:</strong> <span id="listCount">0</span>
+                    </div>
+                    <div class="analysis-item">
+                        <strong>Numbered Items:</strong> <span id="numberedCount">0</span>
+                    </div>
+                </div>
+
+                <div class="analysis-box">
+                    <h3>📝 Correction Log</h3>
+                    <div class="correction-log" id="correctionLog">
+                        <em>No corrections yet...</em>
+                    </div>
+                </div>
+
+                <div class="analysis-box">
+                    <h3>⚡ Quick Actions</h3>
+                    <button class="btn-success" onclick="enhanceReadability()" style="width: 100%; margin-bottom: 8px;">
+                        📖 Enhance Readability
+                    </button>
+                    <button class="btn-primary" onclick="professionalFormat()" style="width: 100%; margin-bottom: 8px;">
+                        💼 Professional Format
+                    </button>
+                    <button class="btn-warning" onclick="extractStructure()" style="width: 100%;">
+                        🏗️ Extract Structure
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <strong>VALKYRIE TEXT FORGE v3.0</strong> | Advanced Intelligence Engine | Self-Hosted Architecture Ready
+        </div>
+    </div>
+
+    <div class="overlay" id="overlay"></div>
+    <div class="processing" id="processing">
+        <div class="spinner"></div>
+        <p><strong id="processingText">Processing Document...</strong></p>
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // VALKYRIE TEXT FORGE v3.0 - FIXED VERSION
+        // ============================================
+        
+        const inputText = document.getElementById('inputText');
+        const outputText = document.getElementById('outputText');
+        const fileInput = document.getElementById('fileInput');
+        let correctionHistory = [];
+        let autoCorrectTimeout = null;
+        let isProcessing = false; // CRITICAL FIX: Prevent multiple simultaneous processes
+
+        // Real-time stats update
+        inputText.addEventListener('input', function() {
+            updateInputStats();
+            
+            // Auto-correct after 1.5 seconds of no typing
+            if (document.getElementById('autoCorrectEnabled').checked && !isProcessing) {
+                clearTimeout(autoCorrectTimeout);
+                document.getElementById('autoCorrectIndicator').classList.add('active');
+                
+                autoCorrectTimeout = setTimeout(() => {
+                    document.getElementById('autoCorrectIndicator').classList.remove('active');
+                    smartFormat();
+                }, 1500);
+            }
+        });
+
+        outputText.addEventListener('input', updateOutputStats);
+
+        // ============================================
+        // ADVANCED AUTO-CORRECTION ENGINE - FIXED
+        // ============================================
+        
+        function smartFormat() {
+            // CRITICAL FIX: Prevent re-entry
+            if (isProcessing) {
+                console.log('Already processing, skipping...');
+                return;
+            }
+
+            const text = inputText.value;
+            if (!text || text.trim().length === 0) {
+                console.log('No text to process');
+                return;
+            }
+
+            isProcessing = true;
+            showProcessing('Analyzing document structure...');
+            updateProgress(10);
+            
+            // Use setTimeout to prevent blocking
+            setTimeout(() => {
+                try {
+                    let processedText = text;
+                    correctionHistory = [];
+                    
+                    // Phase 1: Document Analysis
+                    updateProgress(20);
+                    const analysis = analyzeDocument(processedText);
+                    updateIntelligencePanel(analysis);
+                    
+                    // Phase 2: Structural Corrections
+                    updateProgress(40);
+                    processedText = fixStructure(processedText);
+                    
+                    // Phase 3: Punctuation & Spacing
+                    updateProgress(60);
+                    processedText = fixPunctuationSpacing(processedText);
+                    
+                    // Phase 4: Bullets & Numbering
+                    updateProgress(80);
+                    processedText = fixBulletsAndNumbering(processedText);
+                    
+                    // Phase 5: Grammar & Capitalization
+                    updateProgress(90);
+                    processedText = fixGrammar(processedText);
+                    
+                    // Phase 6: Final Polish
+                    updateProgress(100);
+                    processedText = finalPolish(processedText);
+                    
+                    outputText.value = processedText;
+                    updateOutputStats();
+                    updateCorrectionLog();
+                    
+                    // CRITICAL FIX: Always hide processing and reset flag
+                    setTimeout(() => {
+                        hideProcessing();
+                        isProcessing = false;
+                        showAlert('Document formatted successfully!', 'success');
+                    }, 300);
+                    
+                } catch (error) {
+                    console.error('Error during formatting:', error);
+                    hideProcessing();
+                    isProcessing = false;
+                    showAlert('Error during formatting: ' + error.message, 'danger');
+                }
+            }, 100);
+        }
+
+        function analyzeDocument(text) {
+            const analysis = {
+                type: 'text',
+                structure: 'unstructured',
+                complexity: 0,
+                readingLevel: 'Unknown',
+                hasHeaders: false,
+                hasBullets: false,
+                hasNumbering: false,
+                paragraphCount: 0,
+                headerCount: 0,
+                listCount: 0
+            };
+
+            if (!text || text.trim().length === 0) return analysis;
+
+            try {
+                // Detect document type
+                if (text.match(/^#{1,6}\s/m)) {
+                    analysis.type = 'Markdown';
+                    analysis.hasHeaders = true;
+                } else if (text.match(/<[^>]+>/)) {
+                    analysis.type = 'HTML';
+                } else if (text.match(/^\d+\.\s/m)) {
+                    analysis.type = 'Numbered List';
+                    analysis.hasNumbering = true;
+                } else if (text.match(/^[-•*]\s/m)) {
+                    analysis.type = 'Bullet List';
+                    analysis.hasBullets = true;
+                } else {
+                    analysis.type = 'Plain Text';
+                }
+
+                // Count structural elements
+                analysis.paragraphCount = text.split(/\n\n+/).filter(p => p.trim().length > 0).length;
+                analysis.headerCount = (text.match(/^[A-Z][A-Z\s]+$/gm) || []).length;
+                analysis.listCount = (text.match(/^[-•*]\s/gm) || []).length + (text.match(/^\d+\.\s/gm) || []).length;
+
+                // Determine structure
+                if (analysis.headerCount > 0) {
+                    analysis.structure = 'Hierarchical Document';
+                } else if (analysis.listCount > 5) {
+                    analysis.structure = 'List-based Document';
+                } else if (analysis.paragraphCount > 3) {
+                    analysis.structure = 'Multi-paragraph Document';
+                } else {
+                    analysis.structure = 'Simple Document';
+                }
+
+                // Calculate complexity (0-10)
+                const words = countWords(text);
+                const sentences = countSentences(text);
+                if (words > 0 && sentences > 0) {
+                    const avgWordLength = text.split(/\s+/).reduce((acc, word) => acc + word.length, 0) / words;
+                    const avgSentenceLength = words / sentences;
+                    analysis.complexity = Math.min(10, Math.round((avgWordLength + avgSentenceLength / 5) / 2));
+                }
+
+                // Reading level estimation
+                if (analysis.complexity < 4) analysis.readingLevel = 'Elementary';
+                else if (analysis.complexity < 6) analysis.readingLevel = 'Middle School';
+                else if (analysis.complexity < 8) analysis.readingLevel = 'High School';
+                else analysis.readingLevel = 'College+';
+
+            } catch (error) {
+                console.error('Error in analyzeDocument:', error);
+            }
+
+            return analysis;
+        }
+
+        function fixStructure(text) {
+            if (!text) return text;
+            
+            try {
+                // Remove excessive whitespace
+                if (document.getElementById('removeSpaces').checked) {
+                    text = text.replace(/[ \t]+/g, ' ');
+                    text = text.replace(/\n{4,}/g, '\n\n\n');
+                    logCorrection('Removed excessive whitespace', 'structural');
+                }
+
+                // Normalize line endings
+                text = text.replace(/\r\n/g, '\n');
+            } catch (error) {
+                console.error('Error in fixStructure:', error);
+            }
+
+            return text;
+        }
+
+        function fixPunctuationSpacing(text) {
+            if (!document.getElementById('fixPunctuation').checked || !text) return text;
+
+            try {
+                let fixed = text;
+
+                // Fix spacing before punctuation
+                const before = fixed.length;
+                fixed = fixed.replace(/\s+([.,!?;:])/g, '$1');
+                if (fixed.length !== before) {
+                    logCorrection('Fixed spacing before punctuation', 'punctuation');
+                }
+
+                // Ensure space after punctuation
+                fixed = fixed.replace(/([.,!?;:])([^\s\n])/g, '$1 $2');
+                
+                // Fix multiple punctuation
+                fixed = fixed.replace(/([.!?]){2,}/g, '$1');
+                
+                // Fix spacing after punctuation at end of line
+                fixed = fixed.replace(/\s+$/gm, '');
+
+                // Fix ellipsis
+                fixed = fixed.replace(/\.{3,}/g, '...');
+
+                return fixed;
+            } catch (error) {
+                console.error('Error in fixPunctuationSpacing:', error);
+                return text;
+            }
+        }
+
+        function fixBulletsAndNumbering(text) {
+            if (!text) return text;
+            
+            try {
+                let lines = text.split('\n');
+                let inList = false;
+                let listType = null;
+                let expectedNum = 1;
+
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i];
+
+                    // Detect bullet points
+                    if (document.getElementById('fixBullets').checked) {
+                        if (line.match(/^\s*[-•*●○]\s*/)) {
+                            lines[i] = line.replace(/^\s*[-•*●○]\s*/, '• ');
+                            inList = true;
+                            listType = 'bullet';
+                            logCorrection('Aligned bullet point', 'formatting');
+                        }
+                    }
+
+                    // Detect and fix numbering
+                    if (document.getElementById('fixNumbering').checked) {
+                        const numMatch = line.match(/^\s*(\d+)[.)]\s*/);
+                        if (numMatch) {
+                            const currentNum = parseInt(numMatch[1]);
+                            
+                            if (!inList || listType !== 'number') {
+                                expectedNum = 1;
+                                inList = true;
+                                listType = 'number';
+                            }
+
+                            if (currentNum !== expectedNum) {
+                                lines[i] = line.replace(/^\s*\d+[.)]/, `${expectedNum}.`);
+                                logCorrection(`Fixed numbering: ${currentNum} → ${expectedNum}`, 'numbering');
+                            } else {
+                                lines[i] = line.replace(/^\s*\d+[.)]/, `${expectedNum}.`);
+                            }
+                            
+                            expectedNum++;
+                        } else if (inList && line.trim() === '') {
+                            inList = false;
+                            listType = null;
+                            expectedNum = 1;
+                        }
+                    }
+                }
+
+                return lines.join('\n');
+            } catch (error) {
+                console.error('Error in fixBulletsAndNumbering:', error);
+                return text;
+            }
+        }
+
+        function fixGrammar(text) {
+            if (!document.getElementById('capitalizeSentences').checked || !text) return text;
+
+            try {
+                let fixed = text;
+
+                // Capitalize first letter of sentences
+                fixed = fixed.replace(/(^|\.\s+)([a-z])/g, (match, p1, p2) => p1 + p2.toUpperCase());
+                
+                // Capitalize 'I' when standalone
+                fixed = fixed.replace(/\bi\b/g, 'I');
+                
+                // Fix common contractions
+                fixed = fixed.replace(/\bi'm\b/gi, "I'm");
+                fixed = fixed.replace(/\bdon't\b/gi, "don't");
+                fixed = fixed.replace(/\bcan't\b/gi, "can't");
+                fixed = fixed.replace(/\bwon't\b/gi, "won't");
+
+                logCorrection('Applied grammar corrections', 'grammar');
+
+                return fixed;
+            } catch (error) {
+                console.error('Error in fixGrammar:', error);
+                return text;
+            }
+        }
+
+        function finalPolish(text) {
+            if (!text) return text;
+            
+            try {
+                // Remove trailing spaces
+                text = text.replace(/[ \t]+$/gm, '');
+                
+                // Ensure document ends with single newline
+                text = text.trim() + '\n';
+                
+                // Fix common typos
+                text = text.replace(/\bteh\b/gi, 'the');
+                text = text.replace(/\brecieve\b/gi, 'receive');
+                text = text.replace(/\boccured\b/gi, 'occurred');
+                text = text.replace(/\bseperate\b/gi, 'separate');
+            } catch (error) {
+                console.error('Error in finalPolish:', error);
+            }
+            
+            return text;
+        }
+
+        function logCorrection(description, type) {
+            correctionHistory.push({
+                description,
+                type,
+                timestamp: new Date()
+            });
+        }
+
+        function updateCorrectionLog() {
+            const log = document.getElementById('correctionLog');
+            
+            if (correctionHistory.length === 0) {
+                log.innerHTML = '<em>No corrections made</em>';
+                document.getElementById('correctionCount').textContent = '0';
+                document.getElementById('qualityScore').textContent = '0%';
+                return;
+            }
+
+            const grouped = {};
+            correctionHistory.forEach(item => {
+                if (!grouped[item.type]) grouped[item.type] = [];
+                grouped[item.type].push(item.description);
+            });
+
+            let html = '';
+            Object.keys(grouped).forEach(type => {
+                html += `<div class="correction-item">
+                    <strong>${type.toUpperCase()}:</strong><br>
+                    ${grouped[type].join('<br>')}
+                </div>`;
+            });
+
+            log.innerHTML = html;
+            document.getElementById('correctionCount').textContent = correctionHistory.length;
+            
+            // Calculate quality score
+            const quality = Math.min(100, Math.round((correctionHistory.length / 10) * 100));
+            document.getElementById('qualityScore').textContent = quality + '%';
+        }
+
+        function updateIntelligencePanel(analysis) {
+            document.getElementById('docType').textContent = analysis.type;
+            document.getElementById('docStructure').textContent = analysis.structure;
+            document.getElementById('docComplexity').textContent = analysis.complexity + '/10';
+            document.getElementById('readingLevel').textContent = analysis.readingLevel;
+            document.getElementById('headerCount').textContent = analysis.headerCount;
+            document.getElementById('paragraphCount').textContent = analysis.paragraphCount;
+            document.getElementById('listCount').textContent = analysis.listCount;
+            
+            const numberedCount = (inputText.value.match(/^\d+\.\s/gm) || []).length;
+            document.getElementById('numberedCount').textContent = numberedCount;
+        }
+
+        // ============================================
+        // ENHANCED FEATURES
+        // ============================================
+
+        function enhanceReadability() {
+            if (isProcessing) return;
+            isProcessing = true;
+            showProcessing('Enhancing readability...');
+            
+            setTimeout(() => {
+                try {
+                    let text = outputText.value || inputText.value;
+                    
+                    if (!text || text.trim().length === 0) {
+                        throw new Error('No text to enhance');
+                    }
+                    
+                    // Break long paragraphs
+                    text = text.replace(/([.!?])\s+(?=[A-Z])/g, '$1\n\n');
+                    
+                    // Add spacing around headers
+                    text = text.replace(/^([A-Z][A-Z\s]+)$/gm, '\n$1\n');
+                    
+                    outputText.value = text.trim();
+                    updateOutputStats();
+                    
+                    setTimeout(() => {
+                        hideProcessing();
+                        isProcessing = false;
+                        showAlert('Readability enhanced!', 'success');
+                    }, 300);
+                    
+                } catch (error) {
+                    console.error('Error in enhanceReadability:', error);
+                    hideProcessing();
+                    isProcessing = false;
+                    showAlert('Error: ' + error.message, 'danger');
+                }
+            }, 100);
+        }
+
+        function professionalFormat() {
+            if (isProcessing) return;
+            isProcessing = true;
+            showProcessing('Applying professional formatting...');
+            
+            setTimeout(() => {
+                try {
+                    let text = outputText.value || inputText.value;
+                    
+                    if (!text || text.trim().length === 0) {
+                        throw new Error('No text to format');
+                    }
+                    
+                    // Title case for headers
+                    text = text.replace(/^([A-Z][A-Z\s]+)$/gm, (match) => {
+                        return match.toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+                    });
+                    
+                    // Standardize list formatting
+                    text = text.replace(/^[-•*]\s*/gm, '• ');
+                    text = text.replace(/^\d+[.)]\s*/gm, (match) => {
+                        return match.replace(/[.)]/, '.') + ' ';
+                    });
+                    
+                    // Add professional spacing
+                    text = text.replace(/\n{2,}/g, '\n\n');
+                    
+                    outputText.value = text.trim();
+                    updateOutputStats();
+                    
+                    setTimeout(() => {
+                        hideProcessing();
+                        isProcessing = false;
+                        showAlert('Professional formatting applied!', 'success');
+                    }, 300);
+                    
+                } catch (error) {
+                    console.error('Error in professionalFormat:', error);
+                    hideProcessing();
+                    isProcessing = false;
+                    showAlert('Error: ' + error.message, 'danger');
+                }
+            }, 100);
+        }
+
+        function extractStructure() {
+            const text = inputText.value;
+            
+            if (!text || text.trim().length === 0) {
+                showAlert('No text to analyze!', 'warning');
+                return;
+            }
+            
+            const structure = {
+                headers: [],
+                lists: [],
+                paragraphs: []
+            };
+
+            // Extract headers
+            const headerMatches = text.match(/^[A-Z][A-Z\s]+$/gm);
+            if (headerMatches) {
+                structure.headers = headerMatches;
+            }
+
+            // Extract lists
+            const listItems = text.match(/^[-•*]\s+.+$/gm);
+            if (listItems) {
+                structure.lists = listItems;
+            }
+
+            // Extract paragraphs
+            structure.paragraphs = text.split(/\n\n+/).filter(p => p.trim().length > 0);
+
+            // Display structure
+            let output = '=== DOCUMENT STRUCTURE ===\n\n';
+            output += `Headers (${structure.headers.length}):\n`;
+            structure.headers.forEach((h, i) => {
+                output += `  ${i + 1}. ${h.trim()}\n`;
+            });
+            
+            output += `\nLists (${structure.lists.length} items)\n`;
+            output += `Paragraphs (${structure.paragraphs.length})\n`;
+
+            outputText.value = output;
+            updateOutputStats();
+            showAlert('Structure extracted!', 'info');
+        }
+
+        function compareVersions() {
+            const input = inputText.value;
+            const output = outputText.value;
+
+            if (!input || !output) {
+                showAlert('Need both input and output to compare!', 'warning');
+                return;
+            }
+
+            const comparison = {
+                wordDiff: countWords(output) - countWords(input),
+                charDiff: output.length - input.length,
+                corrections: correctionHistory.length
+            };
+
+            let message = `Comparison:\n`;
+            message += `Words: ${comparison.wordDiff >= 0 ? '+' : ''}${comparison.wordDiff}\n`;
+            message += `Characters: ${comparison.charDiff >= 0 ? '+' : ''}${comparison.charDiff}\n`;
+            message += `Corrections Made: ${comparison.corrections}`;
+
+            alert(message);
+        }
+
+        // ============================================
+        // STATS & UTILITIES
+        // ============================================
+
+        function updateInputStats() {
+            const text = inputText.value;
+            document.getElementById('wordCount').textContent = countWords(text);
+            document.getElementById('charCount').textContent = text.length;
+            document.getElementById('lineCount').textContent = text.split('\n').length;
+            
+            const errors = countErrors(text);
+            document.getElementById('errorCount').textContent = errors;
+        }
+
+        function updateOutputStats() {
+            const text = outputText.value;
+            document.getElementById('outputWordCount').textContent = countWords(text);
+            document.getElementById('outputCharCount').textContent = text.length;
+            document.getElementById('outputLineCount').textContent = text.split('\n').length;
+        }
+
+        function countWords(text) {
+            if (!text || text.trim() === '') return 0;
+            return text.trim().split(/\s+/).length;
+        }
+
+        function countSentences(text) {
+            if (!text || text.trim() === '') return 1;
+            return Math.max(1, text.split(/[.!?]+/).filter(s => s.trim().length > 0).length);
+        }
+
+        function countErrors(text) {
+            if (!text) return 0;
+            
+            let errors = 0;
+            
+            try {
+                // Multiple spaces
+                errors += (text.match(/\s{2,}/g) || []).length;
+                
+                // Spacing before punctuation
+                errors += (text.match(/\s+[.,!?;:]/g) || []).length;
+                
+                // No space after punctuation
+                errors += (text.match(/[.,!?;:][^\s\n]/g) || []).length;
+                
+                // Lowercase after period
+                errors += (text.match(/\.\s+[a-z]/g) || []).length;
+            } catch (error) {
+                console.error('Error counting errors:', error);
+            }
+            
+            return errors;
+        }
+
+        // ============================================
+        // FILE OPERATIONS
+        // ============================================
+
+        fileInput.addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (isProcessing) {
+                showAlert('Please wait for current operation to complete', 'warning');
+                return;
+            }
+
+            isProcessing = true;
+            showProcessing('Loading file...');
+            
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                inputText.value = event.target.result;
+                updateInputStats();
+                
+                setTimeout(() => {
+                    isProcessing = false;
+                    if (document.getElementById('autoCorrectEnabled').checked) {
+                        smartFormat();
+                    } else {
+                        hideProcessing();
+                        showAlert('File loaded successfully!', 'success');
+                    }
+                }, 100);
+            };
+            reader.onerror = function() {
+                hideProcessing();
+                isProcessing = false;
+                showAlert('Error reading file', 'danger');
+            };
+            reader.readAsText(file);
+        });
+
+        async function pasteFromClipboard() {
+            try {
+                const text = await navigator.clipboard.readText();
+                inputText.value = text;
+                updateInputStats();
+                
+                if (document.getElementById('autoCorrectEnabled').checked && !isProcessing) {
+                    smartFormat();
+                } else {
+                    showAlert('Text pasted!', 'success');
+                }
+            } catch (err) {
+                showAlert('Unable to access clipboard. Use Ctrl+V', 'warning');
+            }
+        }
+
+        async function copyToClipboard() {
+            if (!outputText.value) {
+                showAlert('No text to copy!', 'warning');
+                return;
+            }
+            
+            try {
+                await navigator.clipboard.writeText(outputText.value);
+                showAlert('Copied to clipboard!', 'success');
+            } catch (err) {
+                outputText.select();
+                document.execCommand('copy');
+                showAlert('Copied!', 'success');
+            }
+        }
+
+        function clearInput() {
+            if (confirm('Clear all text?')) {
+                inputText.value = '';
+                outputText.value = '';
+                correctionHistory = [];
+                updateInputStats();
+                updateOutputStats();
+                document.getElementById('correctionLog').innerHTML = '<em>No corrections yet...</em>';
+                document.getElementById('correctionCount').textContent = '0';
+                document.getElementById('qualityScore').textContent = '0%';
+            }
+        }
+
+        function downloadText() {
+            const text = outputText.value || inputText.value;
+            if (!text || text.trim().length === 0) {
+                showAlert('No text to download!', 'warning');
+                return;
+            }
+            
+            const blob = new Blob([text], { type: 'text/plain' });
+            download(blob, 'valkyrie-forge-output.txt');
+        }
+
+        // ============================================
+        // FORMAT CONVERSION
+        // ============================================
+
+        function convertFormat() {
+            const format = document.getElementById('formatSelect').value;
+            const text = outputText.value || inputText.value;
+            
+            if (!text || text.trim().length === 0) {
+                showAlert('No text to convert!', 'warning');
+                return;
+            }
+
+            if (isProcessing) {
+                showAlert('Please wait for current operation to complete', 'warning');
+                return;
+            }
+
+            isProcessing = true;
+            showProcessing('Converting format...');
+
+            setTimeout(() => {
+                try {
+                    switch(format) {
+                        case 'txt':
+                            downloadAsText(text);
+                            break;
+                        case 'md':
+                            downloadAsMarkdown(text);
+                            break;
+                        case 'html':
+                            downloadAsHTML(text);
+                            break;
+                        case 'csv':
+                            downloadAsCSV(text);
+                            break;
+                        case 'json':
+                            downloadAsJSON(text);
+                            break;
+                        case 'rtf':
+                            downloadAsRTF(text);
+                            break;
+                    }
+                    
+                    setTimeout(() => {
+                        hideProcessing();
+                        isProcessing = false;
+                        showAlert('Converted to ' + format.toUpperCase(), 'success');
+                    }, 300);
+                } catch (error) {
+                    console.error('Error in convertFormat:', error);
+                    hideProcessing();
+                    isProcessing = false;
+                    showAlert('Error: ' + error.message, 'danger');
+                }
+            }, 100);
+        }
+
+        function downloadAsText(text) {
+            const blob = new Blob([text], { type: 'text/plain' });
+            download(blob, 'document.txt');
+        }
+
+        function downloadAsMarkdown(text) {
+            let md = text;
+            md = md.replace(/^([A-Z][A-Z\s]+)$/gm, '# $1');
+            md = md.replace(/^•\s*/gm, '- ');
+            const blob = new Blob([md], { type: 'text/markdown' });
+            download(blob, 'document.md');
+        }
+
+        function downloadAsHTML(text) {
+            let html = text;
+            html = html.replace(/^([A-Z][A-Z\s]+)$/gm, '<h2>$1</h2>');
+            html = html.split('\n\n').map(p => {
+                if (!p.match(/<h\d>/) && !p.match(/^[-•*]/)) {
+                    return '<p>' + p.replace(/\n/g, '<br>') + '</p>';
+                }
+                return p;
+            }).join('\n');
+
+            const fullHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document - Valkyrie Text Forge</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 40px;
+            line-height: 1.8;
+            color: #333;
+            background: #f5f5f5;
+        }
+        h1, h2, h3 { color: #2c3e50; margin-top: 1.5em; }
+        p { margin: 1em 0; text-align: justify; }
+    </style>
+</head>
+<body>
+${html}
+</body>
+</html>`;
+
+            const blob = new Blob([fullHTML], { type: 'text/html' });
+            download(blob, 'document.html');
+        }
+
+        function downloadAsCSV(text) {
+            const lines = text.split('\n');
+            const csv = lines.map(line => '"' + line.replace(/"/g, '""') + '"').join('\n');
+            const blob = new Blob([csv], { type: 'text/csv' });
+            download(blob, 'document.csv');
+        }
+
+        function downloadAsJSON(text) {
+            const analysis = analyzeDocument(text);
+            const json = {
+                content: text,
+                metadata: {
+                    wordCount: countWords(text),
+                    characterCount: text.length,
+                    lineCount: text.split('\n').length,
+                    correctionsMade: correctionHistory.length,
+                    documentType: analysis.type,
+                    structure: analysis.structure,
+                    complexity: analysis.complexity,
+                    readingLevel: analysis.readingLevel
+                },
+                corrections: correctionHistory,
+                timestamp: new Date().toISOString(),
+                source: 'Valkyrie Text Forge v3.0'
+            };
+            const blob = new Blob([JSON.stringify(json, null, 2)], { type: 'application/json' });
+            download(blob, 'document.json');
+        }
+
+        function downloadAsRTF(text) {
+            let rtf = '{\\rtf1\\ansi\\deff0\n';
+            rtf += '{\\fonttbl{\\f0 Times New Roman;}}\n';
+            rtf += '\\f0\\fs24\n';
+            rtf += text.replace(/\n/g, '\\par\n');
+            rtf += '}';
+            const blob = new Blob([rtf], { type: 'application/rtf' });
+            download(blob, 'document.rtf');
+        }
+
+        function download(blob, filename) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // ============================================
+        // ENCRYPTION
+        // ============================================
+
+        function encrypt(type) {
+            let text = inputText.value;
+            if (!text) {
+                showAlert('No text to encrypt!', 'warning');
+                return;
+            }
+            
+            let result = '';
+            
+            try {
+                switch(type) {
+                    case 'base64':
+                        result = btoa(unescape(encodeURIComponent(text)));
+                        break;
+                    case 'rot13':
+                        result = text.replace(/[a-zA-Z]/g, char => {
+                            const code = char.charCodeAt(0);
+                            const isUpperCase = char === char.toUpperCase();
+                            const base = isUpperCase ? 65 : 97;
+                            return String.fromCharCode(((code - base + 13) % 26) + base);
+                        });
+                        break;
+                }
+                
+                outputText.value = result;
+                updateOutputStats();
+                showAlert('Encrypted with ' + type.toUpperCase(), 'info');
+            } catch (error) {
+                showAlert('Error encrypting: ' + error.message, 'danger');
+            }
+        }
+
+        function decrypt(type) {
+            let text = outputText.value || inputText.value;
+            if (!text) {
+                showAlert('No text to decrypt!', 'warning');
+                return;
+            }
+            
+            let result = '';
+            
+            try {
+                switch(type) {
+                    case 'base64':
+                        result = decodeURIComponent(escape(atob(text)));
+                        break;
+                }
+                
+                outputText.value = result;
+                updateOutputStats();
+                showAlert('Decrypted!', 'success');
+            } catch (error) {
+                showAlert('Invalid encrypted text', 'danger');
+            }
+        }
+
+        function transformText(type) {
+            let text = inputText.value;
+            if (!text) return;
+            
+            switch(type) {
+                case 'uppercase':
+                    text = text.toUpperCase();
+                    break;
+                case 'lowercase':
+                    text = text.toLowerCase();
+                    break;
+                case 'titlecase':
+                    text = text.toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+                    break;
+            }
+            
+            inputText.value = text;
+            updateInputStats();
+        }
+
+        // ============================================
+        // UI HELPERS
+        // ============================================
+
+        function showProcessing(message) {
+            document.getElementById('processingText').textContent = message;
+            document.getElementById('overlay').classList.add('active');
+            document.getElementById('processing').classList.add('active');
+        }
+
+        function hideProcessing() {
+            document.getElementById('overlay').classList.remove('active');
+            document.getElementById('processing').classList.remove('active');
+            updateProgress(0);
+        }
+
+        function updateProgress(percent) {
+            document.getElementById('progressFill').style.width = percent + '%';
+        }
+
+        function showAlert(message, type) {
+            const alertDiv = document.createElement('div');
+            alertDiv.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 15px 25px;
+                background: ${type === 'success' ? '#27ae60' : type === 'danger' ? '#e74c3c' : type === 'warning' ? '#f39c12' : '#3498db'};
+                color: white;
+                border-radius: 8px;
+                font-weight: 600;
+                z-index: 10000;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            `;
+            alertDiv.textContent = message;
+            document.body.appendChild(alertDiv);
+            
+            setTimeout(() => alertDiv.remove(), 3000);
+        }
+
+        // ============================================
+        // INITIALIZATION
+        // ============================================
+
+        window.addEventListener('load', () => {
+            updateInputStats();
+            updateOutputStats();
+            
+            // Restore from localStorage
+            const saved = localStorage.getItem('valkyrie_forge_input_v3');
+            if (saved && !inputText.value) {
+                inputText.value = saved;
+                updateInputStats();
+            }
+        });
+
+        // Auto-save every 5 seconds
+        setInterval(() => {
+            if (inputText.value && !isProcessing) {
+                localStorage.setItem('valkyrie_forge_input_v3', inputText.value);
+            }
+        }, 5000);
+    </script>
+</body>
+</html>

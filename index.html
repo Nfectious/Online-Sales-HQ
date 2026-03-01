@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Online Sales HQ</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #f4f6f9;
+      color: #333;
+    }
+
+    header {
+      background: #1a73e8;
+      color: #fff;
+      padding: 2rem 1.5rem;
+      text-align: center;
+    }
+
+    header h1 { font-size: 2.25rem; letter-spacing: -0.5px; }
+    header p  { margin-top: 0.5rem; font-size: 1.1rem; opacity: 0.9; }
+
+    main {
+      max-width: 960px;
+      margin: 2.5rem auto;
+      padding: 0 1.5rem;
+    }
+
+    .tools-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.08);
+      padding: 1.5rem;
+      transition: transform .15s, box-shadow .15s;
+    }
+
+    .card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 18px rgba(0,0,0,.12);
+    }
+
+    .card h2 {
+      font-size: 1.15rem;
+      color: #1a73e8;
+      margin-bottom: 0.5rem;
+    }
+
+    .card p {
+      font-size: 0.95rem;
+      color: #555;
+      line-height: 1.55;
+    }
+
+    footer {
+      text-align: center;
+      padding: 2rem 1rem;
+      font-size: 0.85rem;
+      color: #888;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Online Sales HQ</h1>
+    <p>A collection of tools to power your online sales</p>
+  </header>
+
+  <main>
+    <div class="tools-grid">
+
+      <div class="card">
+        <h2>📦 Inventory Manager</h2>
+        <p>Track stock levels, set reorder alerts, and keep your product catalog up to date.</p>
+      </div>
+
+      <div class="card">
+        <h2>💰 Pricing Calculator</h2>
+        <p>Quickly calculate margins, markups, and compare competitor pricing to stay competitive.</p>
+      </div>
+
+      <div class="card">
+        <h2>📊 Sales Analytics</h2>
+        <p>Visualise revenue trends, best-sellers, and seasonal patterns at a glance.</p>
+      </div>
+
+      <div class="card">
+        <h2>🚚 Shipping Estimator</h2>
+        <p>Estimate shipping costs across carriers and surface the best rates to your customers.</p>
+      </div>
+
+      <div class="card">
+        <h2>🔗 Listing Sync</h2>
+        <p>Keep product listings consistent across multiple marketplaces from one place.</p>
+      </div>
+
+      <div class="card">
+        <h2>📝 Order Tracker</h2>
+        <p>Monitor order status, manage returns, and keep buyers informed automatically.</p>
+      </div>
+
+    </div>
+  </main>
+
+  <footer>
+    <p>&copy; <span id="year"></span> Online Sales HQ &mdash; All rights reserved.</p>
+  </footer>
+
+  <script>
+    document.getElementById("year").textContent = new Date().getFullYear();
+  </script>
+
+</body>
+</html>
